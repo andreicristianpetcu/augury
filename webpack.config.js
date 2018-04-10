@@ -1,28 +1,21 @@
 /*
  * Helpers
  */
-var sliceArgs = Function.prototype.call.bind(Array.prototype.slice);
-var toString = Function.prototype.call.bind(Object.prototype.toString);
-var NODE_ENV = process.env.NODE_ENV || 'production';
-var pkg = require('./package.json');
-
-// Polyfill
-Object.assign = require('object-assign');
+const sliceArgs = Function.prototype.call.bind(Array.prototype.slice);
+const toString = Function.prototype.call.bind(Object.prototype.toString);
+const NODE_ENV = process.env.NODE_ENV || 'production';
+const pkg = require('./package.json');
 
 // Node
-var path = require('path');
+const path = require('path');
 
 // NPM
-var webpack = require('webpack');
+const webpack = require('webpack');
 
 // Webpack Plugins
-var OccurenceOrderPlugin = webpack.optimize.OccurenceOrderPlugin;
-var CommonsChunkPlugin = webpack.optimize.CommonsChunkPlugin;
-var UglifyJsPlugin = webpack.optimize.UglifyJsPlugin;
-var DedupePlugin = webpack.optimize.DedupePlugin;
-var DefinePlugin = webpack.DefinePlugin;
-var BannerPlugin = webpack.BannerPlugin;
-var MergeJsonWebpackPlugin = require("merge-jsons-webpack-plugin");
+const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
+const DefinePlugin = webpack.DefinePlugin;
+const MergeJsonWebpackPlugin = require("merge-jsons-webpack-plugin");
 
 /**
  * CROSS-BROWSER COMPATIBILITY (and other builds)
@@ -66,11 +59,8 @@ const manifestExtension = getManifestExtension(targetBuild)
  */
 module.exports = {
   devtool: 'source-map',
-  debug: true,
+  mode: NODE_ENV,
   cache: true,
-
-  verbose: true,
-  displayErrorDetails: true,
   context: __dirname,
   stats: {
     colors: true,
@@ -79,7 +69,7 @@ module.exports = {
 
   entry: {
     'frontend': [
-      'webpack.vendor.ts',
+      './webpack.vendor',
       './src/frontend/module'
     ],
     'backend': ['./src/backend/backend'],
@@ -102,53 +92,53 @@ module.exports = {
   },
 
   resolve: {
-    root: __dirname,
-    extensions: ['', '.ts', '.js', '.json']
+    extensions: ['.ts', '.js', '.json']
   },
+
+  // Opt-in to the old behavior with the resolveLoader.moduleExtensions
+  // - https://webpack.js.org/guides/migrating/#automatic-loader-module-name-extension-removed
+  resolveLoader: {
+    moduleExtensions: ['-loader']
+  },
+
   module: {
-    preLoaders: [{
-      test: /\.ts$/,
-      loader: 'tslint',
-      exclude: /node_modules/,
-    }],
-    loaders: [{
-      // Support for .ts files.
-      test: /\.ts$/,
-      loader: 'ts',
-      query: {
-        'ignoreDiagnostics': []
+    rules: [
+      {
+        test: /\.ts$/,
+        use: 'ts-loader',
+        exclude: [
+          /\.min\.js$/,
+          /\.spec\.ts$/,
+          /\.e2e\.ts$/,
+          /web_modules/,
+          /test/,
+          /node_modules\/(?!(ng2-.+))/
+        ]
       },
-      exclude: [
-        /\.min\.js$/,
-        /\.spec\.ts$/,
-        /\.e2e\.ts$/,
-        /web_modules/,
-        /test/,
-        /node_modules\/(?!(ng2-.+))/
-      ]
-    }, {
-      test: /\.css$/,
-      loader: 'css!postcss'
-    }, {
-      test: /\.png$/,
-      loader: "url-loader?mimetype=image/png"
-    }, {
-      test: /\.html$/,
-      loader: 'raw'
-    }],
+      {
+        test: /\.css$/,
+        use: [
+          'to-string-loader',
+          'css-loader',
+          'postcss-loader',
+        ],
+      },
+      {
+        test: /\.png$/,
+        use: 'url-loader?mimetype=image/png',
+      },
+      {
+        test: /\.html$/,
+        use: 'raw-loader',
+      },
+    ],
+
     noParse: [
       /rtts_assert\/src\/rtts_assert/,
       /reflect-metadata/,
       /.+zone\.js\/dist\/.+/,
-      /.+angular2\/bundles\/.+/
-    ]
-  },
-
-  postcss: function () {
-    return [
-      require('postcss-import')({ addConfigTo: webpack }),
-      require('postcss-cssnext')
-    ];
+      /.+angular2\/bundles\/.+/,
+    ],
   },
 
   plugins: [
@@ -158,19 +148,19 @@ module.exports = {
       'VERSION': JSON.stringify(pkg.version),
       'SENTRY_KEY': JSON.stringify(process.env.SENTRY_KEY),
     }),
-    new OccurenceOrderPlugin(),
-    new DedupePlugin(),
     new MergeJsonWebpackPlugin({
-        "files": [
-            BASE_MANIFEST,
-            manifestExtension,
-        ],
-        "output": {
-            "fileName": MANIFEST_OUTPUT
-        }
+      "files": [
+        BASE_MANIFEST,
+        manifestExtension,
+      ],
+      "output": {
+        "fileName": MANIFEST_OUTPUT,
+      },
     }),
   ].concat((NODE_ENV == 'production') ?  [
-    new UglifyJsPlugin()
+    new UglifyJsPlugin({
+      sourceMap: true
+    }),
   ] : [
     // ... dev-only plugins
   ]),
@@ -181,8 +171,8 @@ module.exports = {
    */
   node: {
     crypto: false,
-    __filename: true
-  }
+    __filename: true,
+  },
 };
 
 /**
